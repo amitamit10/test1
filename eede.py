@@ -1,1 +1,1 @@
-gg
+print("ffff")
