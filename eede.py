@@ -1,14 +1,7 @@
 import pyautogui
+import time
 
-# הזזת העכבר למיקום
-pyautogui.moveTo(100, 100)
-
-# קליק שמאלי
-pyautogui.click()
-
-# גרירה
-pyautogui.dragTo(500, 500, duration=1)
-
-# קבלת מיקום העכבר
-x, y = pyautogui.position()
-print(f"Mouse at: {x}, {y}")
+while True:
+    x, y = pyautogui.position()
+    print(f"X: {x} Y: {y}", end="\r")
+    time.sleep(0.1)
