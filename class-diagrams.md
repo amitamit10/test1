@@ -1,78 +1,176 @@
 # Class Diagrams — Remikob2026tamar
 
-Source repository: https://github.com/tamaravami-hub/Remikob2026tamar
-
-This is a C# Windows Forms application. The diagrams below cover all classes and their connections.
+> **Source:** [`tamaravami-hub/Remikob2026tamar`](https://github.com/tamaravami-hub/Remikob2026tamar) · C# Windows Forms Application
 
 ---
 
 ## Full Class Diagram
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "primaryColor":       "#1B2A4A",
+    "primaryTextColor":   "#FFFFFF",
+    "primaryBorderColor": "#4A90D9",
+    "lineColor":          "#4A90D9",
+    "secondaryColor":     "#162032",
+    "tertiaryColor":      "#0D1B2E",
+    "edgeLabelBackground":"#1B2A4A",
+    "background":         "#0D1B2E",
+    "fontFamily":         "Segoe UI, Helvetica, sans-serif",
+    "fontSize":           "15px"
+  }
+}}%%
 classDiagram
     direction TB
 
     class Program {
-        <<static>>
+        <<entry point>>
         +Main()$ void
     }
 
     class Form1 {
+        <<partial class>>
         -IContainer components
         +Form1()
-        #Dispose(disposing bool) void
+        #Dispose(bool disposing) void
         -InitializeComponent() void
-        -Form1_Load(sender Object, e EventArgs) void
+        -Form1_Load(Object sender, EventArgs e) void
     }
 
     class Form {
-        <<WinForms>>
+        <<System.Windows.Forms>>
     }
 
     class IContainer {
-        <<interface>>
+        <<System.ComponentModel>>
     }
 
-    Form1 --|> Form : inherits
-    Form1 o-- IContainer : contains
-    Program ..> Form1 : instantiates
+    Form1        --|>  Form       : inherits
+    Form1        o--  IContainer : contains
+    Program      ..>  Form1      : «creates»
+
+    classDef entryPoint  fill:#0B3D91,stroke:#4A90D9,stroke-width:2px,color:#fff,font-weight:bold
+    classDef customForm  fill:#145A32,stroke:#27AE60,stroke-width:2px,color:#fff,font-weight:bold
+    classDef framework   fill:#4A235A,stroke:#9B59B6,stroke-width:2px,color:#fff
+    classDef iface       fill:#7D3C00,stroke:#E67E22,stroke-width:2px,color:#fff
+
+    class Program:::entryPoint
+    class Form1:::customForm
+    class Form:::framework
+    class IContainer:::iface
 ```
 
 ---
 
-## Relationships Explained
+## Inheritance Hierarchy
 
-| Relationship | From | To | Type | Details |
-|---|---|---|---|---|
-| Inheritance | `Form1` | `Form` (System.Windows.Forms) | `--|>` | `Form1` extends the WinForms `Form` base class |
-| Composition | `Form1` | `IContainer` | `o--` | `Form1` owns a private `components: IContainer` field used to manage child controls |
-| Dependency | `Program` | `Form1` | `..>` | `Program.Main()` instantiates `Form1` and passes it to `Application.Run()` |
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "primaryColor":       "#1B2A4A",
+    "primaryTextColor":   "#FFFFFF",
+    "primaryBorderColor": "#4A90D9",
+    "lineColor":          "#27AE60",
+    "fontFamily":         "Segoe UI, Helvetica, sans-serif",
+    "fontSize":           "14px"
+  }
+}}%%
+classDiagram
+    direction BT
+
+    class Object {
+        <<System>>
+    }
+    class MarshalByRefObject {
+        <<System>>
+    }
+    class Component {
+        <<System.ComponentModel>>
+    }
+    class Control {
+        <<System.Windows.Forms>>
+    }
+    class ScrollableControl {
+        <<System.Windows.Forms>>
+    }
+    class ContainerControl {
+        <<System.Windows.Forms>>
+    }
+    class Form {
+        <<System.Windows.Forms>>
+    }
+    class Form1 {
+        <<Remikob2026tamar>>
+    }
+
+    MarshalByRefObject  --|> Object
+    Component           --|> MarshalByRefObject
+    Control             --|> Component
+    ScrollableControl   --|> Control
+    ContainerControl    --|> ScrollableControl
+    Form                --|> ContainerControl
+    Form1               --|> Form
+
+    classDef sys      fill:#2C3E50,stroke:#7F8C8D,stroke-width:1px,color:#BDC3C7,font-style:italic
+    classDef winforms fill:#1A3A5C,stroke:#2980B9,stroke-width:1px,color:#85C1E9
+    classDef custom   fill:#145A32,stroke:#27AE60,stroke-width:2px,color:#fff,font-weight:bold
+
+    class Object:::sys
+    class MarshalByRefObject:::sys
+    class Component:::sys
+    class Control:::winforms
+    class ScrollableControl:::winforms
+    class ContainerControl:::winforms
+    class Form:::winforms
+    class Form1:::custom
+```
 
 ---
 
-## Per-Class Details
+## Relationships at a Glance
 
-### `Program` (`Program.cs`)
-- **Kind:** `internal static class`
-- **Namespace:** `Remikob2026tamar`
-- **Responsibility:** Application entry point. Enables visual styles and launches `Form1`.
-
-| Member | Signature | Notes |
-|---|---|---|
-| `Main` | `static void Main()` | `[STAThread]` — required for WinForms |
+| Symbol | Type | From → To | Meaning |
+|:------:|------|-----------|---------|
+| `--|>` | **Inheritance** | `Form1` → `Form` | `Form1` extends the WinForms `Form` base class |
+| `o--`  | **Aggregation** | `Form1` → `IContainer` | `Form1` holds a `components` field for designer-managed child controls |
+| `..>`  | **Dependency**  | `Program` → `Form1` | `Program.Main()` instantiates `Form1` and runs it via `Application.Run()` |
 
 ---
 
-### `Form1` (`Form1.cs` + `Form1.Designer.cs`)
-- **Kind:** `public partial class`
-- **Namespace:** `Remikob2026tamar`
-- **Inherits:** `System.Windows.Forms.Form`
-- **Responsibility:** Main application window.
+## Class Reference
 
-| Member | Visibility | Signature | Notes |
-|---|---|---|---|
-| `components` | `private` | `IContainer components` | Holds designer-managed child controls |
-| `Form1()` | `public` | constructor | Calls `InitializeComponent()` |
-| `Dispose` | `protected override` | `void Dispose(bool disposing)` | Disposes `components` if managed |
-| `InitializeComponent` | `private` | `void InitializeComponent()` | Designer-generated — sets up the form |
-| `Form1_Load` | `private` | `void Form1_Load(object sender, EventArgs e)` | Fires on form load (currently empty) |
+### `Program`
+
+| | |
+|---|---|
+| **File** | `Program.cs` |
+| **Kind** | `internal static class` |
+| **Namespace** | `Remikob2026tamar` |
+| **Role** | Application entry point |
+
+| Visibility | Member | Signature | Notes |
+|:---:|---|---|---|
+| `+` | `Main` | `static void Main()` | `[STAThread]` — required for COM/WinForms |
+
+---
+
+### `Form1`
+
+| | |
+|---|---|
+| **Files** | `Form1.cs` · `Form1.Designer.cs` |
+| **Kind** | `public partial class` |
+| **Namespace** | `Remikob2026tamar` |
+| **Inherits** | `System.Windows.Forms.Form` |
+| **Role** | Main application window |
+
+| Visibility | Member | Signature | Notes |
+|:---:|---|---|---|
+| `-` | `components` | `IContainer components` | Designer-managed child controls |
+| `+` | `Form1()` | constructor | Calls `InitializeComponent()` |
+| `#` | `Dispose` | `override void Dispose(bool disposing)` | Disposes `components` when managed |
+| `-` | `InitializeComponent` | `void InitializeComponent()` | Auto-generated by WinForms designer |
+| `-` | `Form1_Load` | `void Form1_Load(object sender, EventArgs e)` | Fires on form load *(currently empty)* |
