@@ -289,3 +289,74 @@ bambu_network_create_agent(log_dir)
   → bambu_network_start_discovery(agent, false, false)
   → bambu_network_destroy_agent(agent)
 ```
+
+---
+
+## 7. Non-Developer-Mode Signing (post-firmware 01.08.03.00)
+
+Starting with firmware `01.08.03.00beta` / `01.08.05.00`, printers reject unsigned
+print commands with error **`84033543`** ("MQTT Command verification failed").
+Developer Mode bypasses this check entirely.
+
+To print **without** Developer Mode, commands must include a cryptographic
+header signed with the RSA private key bundled inside Bambu Connect.
+
+### Signed message envelope
+
+```json
+{
+  "header": {
+    "cert_id":    "<hex-sha256-of-bambu-connect-certificate-der>",
+    "payload_len": 1313,
+    "sign_alg":   "RSA_SHA256",
+    "sign_string": "<base64-rsa-sha256-signature-of-print-object>",
+    "sign_ver":   "v1.0"
+  },
+  "print": {
+    "sequence_id": "0001",
+    "command": "project_file",
+    "url": "ftp:///cache/filename.3mf",
+    ...
+  }
+}
+```
+
+### What is signed
+
+- **Input**: the exact compact-JSON serialisation of the `"print"` sub-object
+- **Algorithm**: RSA-SHA256 (PKCS#1 v1.5)
+- **Key**: Bambu Connect's embedded private key (user must extract it themselves)
+- **Output**: base64-encoded signature in `header.sign_string`
+
+### cert_id
+
+The hex-encoded SHA-256 fingerprint of the Bambu Connect X.509 certificate
+(DER-encoded).  The printer uses this to look up the public key for verification.
+
+### Extracting the key
+
+Use the provided tool:
+
+```bash
+# Install asar extractor
+npm install -g @electron/asar
+
+# Extract from Bambu Connect
+python3 tools/extract_bambu_key.py \
+    --app "/Applications/BambuConnect.app/Contents/Resources/app.asar" \
+    --out ~/.config/BambuStudio/plugins/
+
+# Copy output files to the slicer config directory:
+#   bambu_connect_private.pem
+#   bambu_connect_cert.pem
+```
+
+The plugin loads these files automatically on startup from `set_config_dir()`.
+If the files are absent, the plugin falls back to Developer Mode behaviour.
+
+### Note on both plaintext and encrypted URLs
+
+Bambu Connect sends **both** `url` (plaintext) and `url_enc` (AES+RSA-OAEP)
+simultaneously.  Current firmware accepts the plaintext `url` field when the
+`header` signature is valid, so our implementation omits `url_enc`.
+

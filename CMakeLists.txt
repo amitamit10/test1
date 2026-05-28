@@ -36,6 +36,7 @@ set(BAMBU_SOURCES
     src/MqttClient.cpp
     src/FtpClient.cpp
     src/CloudClient.cpp
+    src/MessageSigner.cpp
     src/NetworkAgent.cpp
     src/exports.cpp
 )

@@ -11,6 +11,7 @@
 #include "MqttClient.hpp"
 #include "FtpClient.hpp"
 #include "CloudClient.hpp"
+#include "MessageSigner.hpp"
 #include "Logger.hpp"
 
 /**
@@ -213,6 +214,7 @@ private:
     std::unique_ptr<MqttClient>   m_lan_mqtt;
     std::unique_ptr<MqttClient>   m_cloud_mqtt;
     std::unique_ptr<CloudClient>  m_cloud_client;
+    MessageSigner                 m_signer;
 
     std::atomic<bool>   m_server_connected{false};
     std::atomic<bool>   m_multi_machine{false};

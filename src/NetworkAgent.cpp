@@ -69,6 +69,8 @@ int NetworkAgent::set_config_dir(const std::string& path)
     std::lock_guard<std::mutex> lock(m_mutex);
     m_config_dir = path;
     LOG_INFO("config_dir=%s", path.c_str());
+    // Try to load Bambu Connect signing key — enables non-Dev-Mode printing
+    m_signer.load(path);
     return 0;
 }
 
@@ -826,7 +828,11 @@ std::string NetworkAgent::build_print_command(const PrintParams& params,
     if (!params.task_bed_type.empty()) {
         j["print"]["bed_type"] = params.task_bed_type;
     }
-    return j.dump();
+
+    // Sign the message if the Bambu Connect key is available.
+    // This enables printing without Developer Mode (post-firmware 01.08.03.00).
+    // m_signer.sign_message() is a no-op when no key is loaded (Developer Mode path).
+    return m_signer.sign_message(j.dump());
 }
 
 int NetworkAgent::do_local_print_flow(const PrintParams& params,
