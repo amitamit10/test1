@@ -7,7 +7,8 @@ uses to sign MQTT print commands.  Once extracted, place the files in your
 slicer's plugin config directory to enable printing without Developer Mode:
 
   <config_dir>/bambu_connect_private.pem   ← private key (PKCS8 PEM)
-  <config_dir>/bambu_connect_cert.pem      ← X.509 certificate (PEM)
+  <config_dir>/bambu_connect_cert.pem      ← X.509 certificate (PEM) [global fallback]
+  <config_dir>/certs/<serial>.pem          ← device-specific certificate (preferred)
 
 Usage
 -----
@@ -20,11 +21,24 @@ Usage
   # Or point at an already-extracted directory
   python3 extract_bambu_key.py --src /path/to/extracted/src
 
+  # Also search for device-specific certs in your slicer config:
+  python3 extract_bambu_key.py --app /path/to/app.asar --find-device-certs
+
 Platform paths
 --------------
   Windows : C:\\Program Files\\Bambu Lab\\Bambu Connect\\resources\\app.asar
   macOS   : /Applications/BambuConnect.app/Contents/Resources/app.asar
   Linux   : /opt/bambu-connect/resources/app.asar   (or flatpak equivalent)
+
+Device-specific certificates
+-----------------------------
+Non-Developer-Mode firmware requires a cert whose CN matches the printer serial.
+The plugin looks for:
+  1. <config_dir>/certs/<serial>.pem   (device-specific — preferred)
+  2. <config_dir>/bambu_connect_cert.pem (global Bambu Connect cert — fallback)
+
+Use --find-device-certs to scan BambuStudio/OrcaSlicer config dirs and copy any
+found device certs into the correct location automatically.
 
 Legal note
 ----------
@@ -128,6 +142,74 @@ def extract_from_js(js_text: str):
     return key, cert
 
 
+# ── Device cert search ────────────────────────────────────────────────────────
+
+def get_cert_common_name(cert_path: Path) -> str | None:
+    """Extract the CN from a PEM certificate using openssl CLI."""
+    try:
+        result = subprocess.run(
+            ['openssl', 'x509', '-noout', '-subject', '-in', str(cert_path)],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            # "subject=CN = GLOF3813734089.bambulab.com"  or  "subject= /CN=GLOF38..."
+            m = re.search(r'CN\s*=\s*([^\s,/]+)', result.stdout)
+            if m:
+                return m.group(1).strip()
+    except Exception:
+        pass
+    return None
+
+
+def slicer_config_dirs() -> list[Path]:
+    """Return candidate slicer config directories where certs might live."""
+    home = Path.home()
+    candidates = [
+        # OrcaSlicer
+        home / '.config' / 'OrcaSlicer',
+        home / '.var' / 'app' / 'io.github.softfever.OrcaSlicer' / 'config' / 'OrcaSlicer',
+        home / '.var' / 'app' / 'com.bambulab.BambuStudio' / 'config' / 'OrcaSlicer',
+        # BambuStudio
+        home / '.config' / 'BambuStudio',
+        home / '.var' / 'app' / 'com.bambulab.BambuStudio' / 'config' / 'BambuStudio',
+        # macOS
+        home / 'Library' / 'Application Support' / 'OrcaSlicer',
+        home / 'Library' / 'Application Support' / 'BambuStudio',
+        # Windows (via WSL path)
+        Path('/mnt/c/Users') / os.environ.get('USER', '') / 'AppData' / 'Roaming' / 'OrcaSlicer',
+        Path('/mnt/c/Users') / os.environ.get('USER', '') / 'AppData' / 'Roaming' / 'BambuStudio',
+        # BambuConnect own data directory (may contain per-device certs)
+        home / '.local' / 'share' / 'BambuConnect',
+        home / '.var' / 'app' / 'com.bambulab.BambuConnect' / 'data' / 'BambuConnect',
+    ]
+    return [d for d in candidates if d.exists()]
+
+
+def find_device_certs(search_dirs: list[Path]) -> dict[str, Path]:
+    """
+    Scan slicer config dirs for PEM files that look like Bambu device certs
+    (CN=<serial>.bambulab.com).
+
+    Returns dict of {serial: cert_path}.
+    """
+    found: dict[str, Path] = {}
+    pem_globs = ['**/*.pem', '**/*.crt', '**/*.cer']
+
+    for base in search_dirs:
+        for pattern in pem_globs:
+            for pem_file in base.glob(pattern):
+                try:
+                    cn = get_cert_common_name(pem_file)
+                    if cn and cn.endswith('.bambulab.com'):
+                        serial = cn.replace('.bambulab.com', '')
+                        if serial not in found:
+                            print(f"[+] Found device cert: {pem_file}  (CN={cn})")
+                            found[serial] = pem_file
+                except Exception:
+                    pass
+    return found
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def extract_asar(asar_path: Path, dest: Path):
@@ -169,6 +251,9 @@ def main():
     group.add_argument('--src',  type=Path, help='Path to already-extracted src directory')
     parser.add_argument('--out', type=Path, default=Path('.'),
                         help='Output directory (default: current dir)')
+    parser.add_argument('--find-device-certs', action='store_true',
+                        help='Also scan slicer config dirs for device-specific certs and '
+                             'copy them to <out>/certs/<serial>.pem')
     args = parser.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -215,11 +300,37 @@ def main():
             out_cert.write_text(cert)
             print(f"[+] Certificate  → {out_cert}")
 
+        # ── Device-specific certificate search ───────────────────────────────
+        if args.find_device_certs:
+            print()
+            print("[*] Scanning for device-specific certificates …")
+            search_dirs = slicer_config_dirs()
+            if not search_dirs:
+                print("[!] No slicer config directories found.")
+            else:
+                print(f"[*] Searching in: {', '.join(str(d) for d in search_dirs)}")
+                device_certs = find_device_certs(search_dirs)
+                if device_certs:
+                    certs_dir = args.out / 'certs'
+                    certs_dir.mkdir(exist_ok=True)
+                    for serial, src_cert in device_certs.items():
+                        dst = certs_dir / f"{serial}.pem"
+                        shutil.copy2(src_cert, dst)
+                        print(f"[+] Device cert  → {dst}  (serial={serial})")
+                    print(f"[+] {len(device_certs)} device cert(s) copied to {certs_dir}/")
+                else:
+                    print("[!] No device-specific certs found.")
+                    print("    Make sure you have paired your printer with BambuStudio or OrcaSlicer.")
+                    print("    The cert CN must end with .bambulab.com")
+
         print()
         print("Copy these files to your slicer's plugin config directory:")
-        print("  Linux  : ~/.config/BambuStudio/plugins/")
+        print("  Linux  : ~/.config/BambuStudio/plugins/   (or OrcaSlicer)")
         print("  macOS  : ~/Library/Application Support/BambuStudio/plugins/")
         print("  Windows: %APPDATA%\\BambuStudio\\plugins\\")
+        print()
+        print("For non-Developer-Mode printing, also copy certs/<serial>.pem to")
+        print("<plugin_config_dir>/certs/<serial>.pem")
         print()
         print("Restart the slicer — non-Developer-Mode printing will be enabled.")
 

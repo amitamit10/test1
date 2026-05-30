@@ -69,7 +69,8 @@ int NetworkAgent::set_config_dir(const std::string& path)
     std::lock_guard<std::mutex> lock(m_mutex);
     m_config_dir = path;
     LOG_INFO("config_dir=%s", path.c_str());
-    // Try to load Bambu Connect signing key — enables non-Dev-Mode printing
+    // Load signing key without a device serial for now;
+    // reloaded with the device serial in connect_printer().
     m_signer.load(path);
     return 0;
 }
@@ -197,6 +198,12 @@ int NetworkAgent::connect_printer(const std::string& dev_id,
 {
     LOG_INFO("connect_printer: dev_id=%s ip=%s ssl=%d",
              dev_id.c_str(), dev_ip.c_str(), (int)use_ssl);
+
+    // Reload signer with device-specific cert (CN=<dev_id>.bambulab.com)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_signer.load(m_config_dir, dev_id);
+    }
 
     // Capture callbacks before creating the client
     std::function<void(std::string)> on_printer_connected;
